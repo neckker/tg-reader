@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>tg-reader</title>
+
+        <!-- Tailwind CSS (CDN) -->
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <style>
+            :root {
+                --color-main: #171923; /* фон всей страницы */
+                --color-panel: #1f222d; /* фон для «своих» сообщений */
+                --color-line: #2e353f; /* обводка для «своих» сообщений */
+                --color-panel-light: #ffffff07; /* фон для «чужих» сообщений */
+                --color-line-light: #ffffff1a; /* обводка для «чужих» сообщений */
+                --color-muted: #c3c9d1; /* для системных сообщений и дат */
+                --color-accent: #7f3bf5; /* для кнопок и акцентов */
+            }
+
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+                padding: 0;
+                background-color: var(--color-main);
+                color: var(--color-muted);
+                font-family: Arial, sans-serif;
+                overflow: hidden; /* чтобы не было двойной прокрутки */
+            }
+
+            /* ============ Шапка ============ */
+            #header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background-color: var(--color-panel);
+                border-bottom: 1px solid var(--color-line);
+                padding: 0.75rem 1rem;
+                flex-shrink: 0;
+            }
+            #chatTitle {
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: white;
+                margin: 0;
+            }
+            #loadBtn {
+                background-color: var(--color-accent);
+                color: white;
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+            }
+            #loadBtn:hover {
+                opacity: 0.9;
+            }
+            #fileInput {
+                display: none;
+            }
+
+            /* ============ Контейнер сообщений ============ */
+            #messagesContainer {
+                height: calc(
+                    100% - 3.5rem
+                ); /* высота экрана минус высота шапки (~56px) */
+                overflow-y: auto;
+                background-color: var(--color-main);
+            }
+            .inner-container {
+                max-width: 80rem; /* max-w-7xl = 80rem */
+                margin: 0 auto;
+                padding: 1rem;
+                box-sizing: border-box;
+            }
+
+            /* ============ Системное сообщение ============ */
+            .msg-service {
+                text-align: center;
+                font-style: italic;
+                color: var(--color-muted);
+                margin: 0.5rem 0;
+                padding: 0.25rem 0;
+                background: none;
+            }
+
+            /* ============ Наше сообщение ============ */
+            .msg-self {
+                background-color: var(--color-panel);
+                border: 1px solid var(--color-line);
+                margin-left: auto;
+                margin-bottom: 0.75rem;
+                max-width: 36rem; /* ~576px */
+                padding: 0.75rem 1rem;
+                border-radius: 0.5rem;
+                color: white;
+                word-break: break-word;
+            }
+
+            /* ============ Сообщение собеседника ============ */
+            .msg-other {
+                background-color: var(--color-panel-light);
+                border: 1px solid var(--color-line-light);
+                margin-right: auto;
+                margin-bottom: 0.75rem;
+                max-width: 36rem; /* ~576px */
+                padding: 0.75rem 1rem;
+                border-radius: 0.5rem;
+                color: white;
+                word-break: break-word;
+            }
+
+            /* ============ Шапка одного сообщения ============ */
+            .message-header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+            .message-header .author {
+                font-weight: bold;
+                color: white;
+            }
+            .message-header .date {
+                font-size: 0.875rem;
+                color: var(--color-muted);
+                font-style: italic;
+            }
+            .message-header .edited {
+                font-size: 0.75rem;
+                color: var(--color-muted);
+                font-style: italic;
+            }
+
+            /* ============ Тело сообщения ============ */
+            .message-body p {
+                margin: 0;
+                white-space: pre-wrap;
+                line-height: 1.4;
+            }
+            .message-body img {
+                display: block;
+                margin-top: 0.5rem;
+                max-width: 20rem; /* ~320px */
+                border-radius: 0.375rem;
+                border: 1px solid var(--color-line-light);
+            }
+            .message-body video {
+                display: block;
+                margin-top: 0.5rem;
+                max-width: 20rem;
+                border-radius: 0.375rem;
+                border: 1px solid var(--color-line-light);
+            }
+            .message-body audio {
+                display: block;
+                margin-top: 0.5rem;
+                width: 100%;
+                max-width: 20rem;
+            }
+
+            /* ============ Футер сообщения (реакции + кнопка «Ответ») ============ */
+            .message-footer {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                margin-top: 0.5rem;
+            }
+            .reaction-bubble {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                background-color: var(--color-line);
+                color: white;
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+                border-radius: 9999px;
+            }
+            .reply-btn {
+                font-size: 0.75rem;
+                font-style: italic;
+                color: var(--color-accent);
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 0;
+            }
+            .reply-btn:hover {
+                text-decoration: underline;
+            }
+
+            /* ============ Подсветка при переходе к оригиналу ============ */
+            .highlight {
+                box-shadow: 0 0 0 2px var(--color-accent);
+                transition: box-shadow 0.3s ease-out;
+            }
+
+            /* custom scroll */
+            *::-webkit-scrollbar {
+                width: 14px !important;
+                height: 12px;
+            }
+
+            *::-webkit-scrollbar-track {
+                background: #252835;
+            }
+
+            *::-webkit-scrollbar-thumb {
+                background-color: #484d64;
+                border-radius: 10px;
+                border: 4px solid #252835;
+            }
+
+            *::-webkit-scrollbar-thumb:hover {
+                background-color: #525870;
+            }
+        </style>
+    </head>
+
+    <body>
+        <!-- ============ Шапка: название чата + кнопка загрузки ============ -->
+        <div id="header">
+            <h1 id="chatTitle">Telegram Chat Viewer</h1>
+            <div>
+                <button id="loadBtn">Загрузить историю</button>
+                <input type="file" id="fileInput" accept=".json" />
+            </div>
+        </div>
+
+        <!-- ============ Контейнер для сообщений ============ -->
+        <div id="messagesContainer">
+            <div class="inner-container">
+                <div id="scrollArea" class="overflow-y-auto h-full">
+                    <div id="contentArea"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Основной скрипт -->
+        <script src="app.js"></script>
+    </body>
+</html>

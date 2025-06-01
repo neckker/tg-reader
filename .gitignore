@@ -1,0 +1,14 @@
+# ignore all telegram files
+contacts/
+css/
+files/
+images/
+js/
+photos/
+round_video_messages/
+stickers/
+video_files/
+voice_messages/
+
+# ignore .json files with sensitive data
+*.json
