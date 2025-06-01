@@ -1,5 +1,3 @@
-// worker.js
-
 self.onmessage = function (e) {
     try {
         const buffer = e.data

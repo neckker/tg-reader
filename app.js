@@ -1,33 +1,24 @@
-// app.js
+let allMessages = []
+let idMap = {}
+let participantName = ''
 
-// ====================== Глобальные переменные ======================
-let allMessages = [] // Массив всех сообщений из JSON
-let idMap = {} // Словарь { message_id: сообщение } для переходов «Ответ на …»
-let myUserId = null // ID «своего» пользователя
+const pageSize = 200
+let currentPage = 0
+let totalPages = 1
 
-// Пагинация
-const pageSize = 200 // Сколько сообщений показываем на одной «странице»
-let currentPage = 0 // Номер текущей страницы (0-based)
-let totalPages = 1 // Общее число страниц (будет пересчитано после загрузки)
-
-// HTML-элементы
 const loadBtn = document.getElementById('loadBtn')
 const fileInput = document.getElementById('fileInput')
 const chatTitle = document.getElementById('chatTitle')
 const contentArea = document.getElementById('contentArea')
 const scrollArea = document.getElementById('scrollArea')
 
-// ====================== Инициализация слушателей ======================
 ;(function init() {
-    // При клике на «Загрузить» открываем <input type="file">
     loadBtn.addEventListener('click', () => {
         fileInput.click()
     })
-    // Когда файл выбран — читаем его
     fileInput.addEventListener('change', onFileSelected)
 })()
 
-// ====================== Обработка выбора файла ======================
 async function onFileSelected(event) {
     const file = event.target.files[0]
     if (!file) return
@@ -40,7 +31,7 @@ async function onFileSelected(event) {
         worker.onmessage = function (e) {
             const msg = e.data
             if (!msg.success) {
-                alert('Ошибка при парсинге JSON: ' + msg.error)
+                alert('Error parsing JSON: ' + msg.error)
                 worker.terminate()
                 return
             }
@@ -50,15 +41,14 @@ async function onFileSelected(event) {
         }
 
         worker.onerror = function (err) {
-            alert('Ошибка воркера: ' + err.message)
+            alert('Worker error: ' + err.message)
             worker.terminate()
         }
     } catch (err) {
-        alert('Не удалось прочитать файл: ' + err)
+        alert('Failed to read file: ' + err)
     }
 }
 
-// ====================== Обработка распарсенного JSON ======================
 function processLoadedData(data) {
     let chatObject = null
     if (data.messages && Array.isArray(data.messages)) {
@@ -70,51 +60,45 @@ function processLoadedData(data) {
     ) {
         chatObject = data.chats.list[0]
     } else {
-        alert('Не найдены сообщения в JSON.')
+        alert('No messages found in JSON.')
         return
     }
 
-    // Устанавливаем название чата
-    const chatName = chatObject.name || data.name || 'Чат Telegram'
+    const chatName = chatObject.name || data.name || 'Telegram Chat'
     chatTitle.textContent = chatName
+    participantName = chatName
 
-    // Сохраняем массив сообщений
     allMessages = chatObject.messages || []
 
-    // Определяем свой userId (если есть data.user.id) или берём первый from_id
-    if (chatObject.user && chatObject.user.id) {
-        myUserId = chatObject.user.id
-    } else if (allMessages.length) {
-        myUserId = allMessages[0].from_id
-    }
-
-    // Заполняем idMap для переходов «Ответ на…»
     allMessages.forEach(msg => {
         if (msg.id != null) idMap[msg.id] = msg
     })
 
-    // Считаем, сколько всего страниц
     totalPages = Math.ceil(allMessages.length / pageSize)
-    currentPage = 0 // сбрасываем на первую страницу
-
-    // Рендерим текущую страницу
+    currentPage = 0
     renderCurrentPage()
 }
 
-// ====================== Рендер текущей «страницы» (200 сообщений) ======================
 function renderCurrentPage() {
-    // 1) Очищаем предыдущий контент
     contentArea.innerHTML = ''
 
-    // 2) Считаем границы «среза» массива
     const startIndex = currentPage * pageSize
     const endIndex = Math.min(startIndex + pageSize, allMessages.length)
 
-    // 3) Формируем DocumentFragment для вставки
     const frag = document.createDocumentFragment()
+    let lastDateKey = null
 
     for (let i = startIndex; i < endIndex; i++) {
         const msg = allMessages[i]
+        const msgDateKey = getDateKey(msg.date)
+        if (msgDateKey && msgDateKey !== lastDateKey) {
+            const sep = document.createElement('div')
+            sep.className = 'date-separator'
+            sep.textContent = `─── ${formatFullDate(msg.date)} ───`
+            frag.appendChild(sep)
+            lastDateKey = msgDateKey
+        }
+
         const wrapper = document.createElement('div')
         wrapper.innerHTML = renderMessageHTML(msg)
         frag.appendChild(wrapper.firstElementChild)
@@ -122,90 +106,90 @@ function renderCurrentPage() {
 
     contentArea.appendChild(frag)
 
-    // 4) Внизу добавляем навигационные кнопки «Previous» / «Next»
     const navDiv = document.createElement('div')
-    navDiv.className = 'flex justify-center items-center gap-4 py-4'
-    navDiv.style.flexWrap = 'wrap'
+    navDiv.className = 'flex justify-center items-center gap-4 py-4 flex-wrap'
 
-    // Кнопка «Previous Page»
     const prevBtn = document.createElement('button')
     prevBtn.textContent = '← Previous Page'
-    prevBtn.className = `
-    px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 
-    focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500
-  `
+    prevBtn.className =
+        'px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600'
     prevBtn.disabled = currentPage === 0
     prevBtn.onclick = () => {
         if (currentPage > 0) {
             currentPage--
             renderCurrentPage()
-            scrollToTop()
         }
     }
 
-    // Кнопка «Next Page»
+    const infoSpan = document.createElement('span')
+    infoSpan.textContent = `Page ${currentPage + 1} of ${totalPages}`
+    infoSpan.className = 'text-gray-400 italic'
+
     const nextBtn = document.createElement('button')
     nextBtn.textContent = 'Next Page →'
-    nextBtn.className = `
-    px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 
-    focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500
-  `
+    nextBtn.className =
+        'px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600'
     nextBtn.disabled = currentPage >= totalPages - 1
     nextBtn.onclick = () => {
         if (currentPage < totalPages - 1) {
             currentPage++
             renderCurrentPage()
-            scrollToTop()
         }
     }
-
-    // Текст «Страница X из Y»
-    const infoSpan = document.createElement('span')
-    infoSpan.textContent = `Page ${currentPage + 1} of ${totalPages}`
-    infoSpan.className = 'text-gray-400 italic'
 
     navDiv.appendChild(prevBtn)
     navDiv.appendChild(infoSpan)
     navDiv.appendChild(nextBtn)
-
     contentArea.appendChild(navDiv)
 }
 
-// Вспомогательная функция: при переключении страницы скроллить наверх
-function scrollToTop() {
-    scrollArea.scrollTop = 0
+function getDateKey(isoString) {
+    if (!isoString) return null
+    const d = new Date(isoString)
+    if (isNaN(d)) return null
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${year}-${month}-${day}`
 }
 
-// ====================== Построение HTML одного сообщения ======================
+function formatFullDate(isoString) {
+    const d = new Date(isoString)
+    if (isNaN(d)) return ''
+    return d.toLocaleDateString('en-US', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+    })
+}
+
 function renderMessageHTML(msg) {
-    // Если сервисное «phone_call» — рендерим через отдельную функцию
     if (msg.type === 'service' && msg.action === 'phone_call') {
         return renderPhoneCallHTML(msg)
     }
 
-    // Определяем, «свое» ли это сообщение
     let cls = ''
     if (msg.type === 'service') {
         cls = 'msg-service'
-    } else if (myUserId && msg.from_id === myUserId) {
-        cls = 'msg-self'
-    } else {
+    } else if (msg.from === participantName) {
         cls = 'msg-other'
+    } else {
+        cls = 'msg-self'
     }
 
-    // Шапка: автор и дата
     const authorRaw = msg.from || msg.actor || ''
     const author = escapeHtml(authorRaw)
 
     const dateObj = new Date(msg.date || '')
     const dateStrRaw = isNaN(dateObj)
         ? ''
-        : dateObj.toLocaleString('ru-RU', {
+        : dateObj.toLocaleDateString('en-US', {
               day: '2-digit',
-              month: '2-digit',
+              month: 'long',
               year: 'numeric',
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
+              hour12: false
           })
     const dateStr = escapeHtml(dateStrRaw)
 
@@ -219,10 +203,8 @@ function renderMessageHTML(msg) {
       </div>`
     }
 
-    // Тело сообщения: текст + медиа
     let bodyHTML = `<div class="message-body">`
 
-    // — Текст
     if (msg.text) {
         if (typeof msg.text === 'string') {
             bodyHTML += `<p>${escapeHtml(msg.text)}</p>`
@@ -256,7 +238,6 @@ function renderMessageHTML(msg) {
         }
     }
 
-    // — Фото
     if (msg.photo) {
         const src = escapeHtml(msg.photo)
         bodyHTML += `
@@ -268,7 +249,6 @@ function renderMessageHTML(msg) {
       />`
     }
 
-    // — Стикер
     if (msg.media_type === 'sticker' && msg.file) {
         const src = escapeHtml(msg.file)
         bodyHTML += `
@@ -280,7 +260,6 @@ function renderMessageHTML(msg) {
       />`
     }
 
-    // — Голосовое сообщение
     if (msg.media_type === 'voice_message' && msg.file) {
         const src = escapeHtml(msg.file)
         bodyHTML += `
@@ -291,7 +270,6 @@ function renderMessageHTML(msg) {
       ></audio>`
     }
 
-    // — Видео
     if (msg.media_type === 'video_message' && msg.file) {
         const src = escapeHtml(msg.file)
         bodyHTML += `
@@ -302,7 +280,6 @@ function renderMessageHTML(msg) {
       ></video>`
     }
 
-    // — Прочие вложения (PDF, документы и т.д.)
     if (
         msg.file &&
         !['sticker', 'voice_message', 'video_message'].includes(
@@ -330,7 +307,6 @@ function renderMessageHTML(msg) {
 
     bodyHTML += `</div>`
 
-    // Футер: реакции + кнопка «Ответ на …»
     let footerHTML = ''
     const hasReactions =
         Array.isArray(msg.reactions) && msg.reactions.length > 0
@@ -339,7 +315,6 @@ function renderMessageHTML(msg) {
     if (hasReactions || hasReply) {
         footerHTML = `<div class="message-footer">`
 
-        // Реакции
         if (hasReactions) {
             msg.reactions.forEach(r => {
                 if (
@@ -356,7 +331,6 @@ function renderMessageHTML(msg) {
             })
         }
 
-        // Кнопка «Ответ на …»
         if (hasReply) {
             const parentMsg = idMap[msg.reply_to_message_id]
             let replySnippet = ''
@@ -372,7 +346,7 @@ function renderMessageHTML(msg) {
                     replySnippet = pAuthor
                 }
             } else {
-                replySnippet = '(оригинал)'
+                replySnippet = '(original)'
             }
 
             footerHTML += `
@@ -380,7 +354,7 @@ function renderMessageHTML(msg) {
           class="reply-btn"
           onclick="scrollToReply(${msg.reply_to_message_id})"
         >
-          Ответ на ${replySnippet}
+          Reply to ${replySnippet}
         </button>`
         }
 
@@ -396,7 +370,6 @@ function renderMessageHTML(msg) {
   `
 }
 
-// ====================== Рендер «звонка» ======================
 function renderPhoneCallHTML(msg) {
     const actorRaw = msg.actor || ''
     const actor = escapeHtml(actorRaw)
@@ -404,12 +377,13 @@ function renderPhoneCallHTML(msg) {
     const dateObj = new Date(msg.date || '')
     const dateStrRaw = isNaN(dateObj)
         ? ''
-        : dateObj.toLocaleString('ru-RU', {
+        : dateObj.toLocaleDateString('en-US', {
               day: '2-digit',
-              month: '2-digit',
+              month: 'long',
               year: 'numeric',
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
+              hour12: false
           })
     const dateStr = escapeHtml(dateStrRaw)
 
@@ -427,8 +401,8 @@ function renderPhoneCallHTML(msg) {
     }
     const callTextEscaped = escapeHtml(callText)
 
-    const isSelf = myUserId && msg.actor_id === myUserId
-    const cls = isSelf ? 'msg-call-self' : 'msg-call-other'
+    const isSelf = msg.actor === participantName
+    const cls = isSelf ? 'msg-call-other' : 'msg-call-self'
 
     return `
     <div id="msg-${msg.id}" class="${cls}">
@@ -446,7 +420,6 @@ function renderPhoneCallHTML(msg) {
   `
 }
 
-// ====================== Утилита: короткий текст для реплая ======================
 function getShortText(msg) {
     let raw = ''
     if (msg.text) {
@@ -462,7 +435,6 @@ function getShortText(msg) {
     return raw.length > 40 ? raw.slice(0, 40) + '...' : raw
 }
 
-// ====================== Утилита: экранирование HTML ======================
 function escapeHtml(str) {
     if (str === null || str === undefined) {
         return ''
@@ -476,7 +448,6 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;')
 }
 
-// ====================== Переход к оригиналу (reply → parent) ======================
 function scrollToReply(parentMsgId) {
     const el = document.getElementById('msg-' + parentMsgId)
     if (!el) return
