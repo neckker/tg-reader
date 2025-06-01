@@ -94,7 +94,7 @@
                 border: 1px solid var(--color-line);
                 margin-left: auto;
                 margin-bottom: 0.75rem;
-                max-width: 36rem; /* ~576px */
+                max-width: 34rem; /* ~576px */
                 padding: 0.75rem 1rem;
                 border-radius: 0.5rem;
                 color: white;
@@ -107,10 +107,42 @@
                 border: 1px solid var(--color-line-light);
                 margin-right: auto;
                 margin-bottom: 0.75rem;
-                max-width: 36rem; /* ~576px */
+                max-width: 34rem; /* ~576px */
                 padding: 0.75rem 1rem;
                 border-radius: 0.5rem;
                 color: white;
+                word-break: break-word;
+            }
+
+            /* ============ Звонок — свое (справа) ============ */
+            .msg-call-self {
+                background-color: var(--color-panel);
+                border: 1px solid var(--color-line);
+                margin-left: auto;
+                margin-bottom: 0.75rem;
+                max-width: 34rem; /* чуть уже, чтобы иконка+текст помещались */
+                padding: 0.5rem 1rem;
+                border-radius: 0.5rem;
+                color: white;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                word-break: break-word;
+            }
+
+            /* ============ Звонок — чужой (слева) ============ */
+            .msg-call-other {
+                background-color: var(--color-panel-light);
+                border: 1px solid var(--color-line-light);
+                margin-right: auto;
+                margin-bottom: 0.75rem;
+                max-width: 34rem;
+                padding: 0.5rem 1rem;
+                border-radius: 0.5rem;
+                color: white;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
                 word-break: break-word;
             }
 
@@ -195,8 +227,7 @@
 
             /* ============ Подсветка при переходе к оригиналу ============ */
             .highlight {
-                box-shadow: 0 0 0 2px var(--color-accent);
-                transition: box-shadow 0.3s ease-out;
+                border: solid 1px var(--color-accent);
             }
 
             /* custom scroll */

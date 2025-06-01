@@ -101,7 +101,7 @@ function processLoadedData(data) {
 
 // ====================== Рендер всех сообщений (без виртуализации) ======================
 function renderAllMessages() {
-    // Очищаем предыдущие
+    // Очищаем предыдущий контент
     contentArea.innerHTML = ''
 
     // Используем DocumentFragment для скорости
@@ -110,8 +110,7 @@ function renderAllMessages() {
     allMessages.forEach(msg => {
         const wrapper = document.createElement('div')
         wrapper.innerHTML = renderMessageHTML(msg)
-        // Получаем созданный элемент (первый дочерний)
-        const el = wrapper.firstElementChild
+        const el = wrapper.firstElementChild // готовый элемент
         frag.appendChild(el)
     })
 
@@ -120,7 +119,13 @@ function renderAllMessages() {
 
 // ====================== Функция строит HTML одного сообщения ======================
 function renderMessageHTML(msg) {
-    // 1) Определяем класс контейнера
+    // Если это сервисное сообщение ЗВОНКА — рендерим отдельно
+    if (msg.type === 'service' && msg.action === 'phone_call') {
+        return renderPhoneCallHTML(msg)
+    }
+
+    // Иначе строим «обычное» сообщение с текстом/медиа и (возможно) кнопкой «Ответ на…»
+    // 1) Определяем класс контейнера: msg-service, msg-self или msg-other
     let cls = ''
     if (msg.type === 'service') {
         cls = 'msg-service'
@@ -228,7 +233,7 @@ function renderMessageHTML(msg) {
       ></video>`
     }
 
-    // 3.6) Прочие вложения
+    // 3.6) Прочие вложения (PDF, документы и т.д.)
     if (
         msg.file &&
         !['sticker', 'voice_message', 'video_message'].includes(
@@ -283,12 +288,21 @@ function renderMessageHTML(msg) {
         // Реплай: кнопка «Ответ на…»
         if (hasReply) {
             const parentMsg = idMap[msg.reply_to_message_id]
-            let replySnippet = '(оригинал)'
+            let replySnippet = ''
             if (parentMsg) {
                 const pAuthor = parentMsg.from || parentMsg.actor || ''
-                const pText = getShortText(parentMsg)
-                replySnippet = `${pAuthor}: “${pText}”`
+                const pTextRaw = getShortText(parentMsg)
+                if (pTextRaw) {
+                    replySnippet = `${pAuthor}: “${pTextRaw}”`
+                } else {
+                    // Если у родительского нет текста, выводим только автора
+                    replySnippet = pAuthor
+                }
+            } else {
+                // На всякий случай, если parentMsg не найден
+                replySnippet = '(оригинал)'
             }
+
             footerHTML += `
         <button
           class="reply-btn"
@@ -302,11 +316,68 @@ function renderMessageHTML(msg) {
     }
 
     // 5) Собираем весь HTML
-    return `<div id="msg-${msg.id}" class="${cls}">
+    return `
+    <div id="msg-${msg.id}" class="${cls}">
       ${headerHTML}
       ${bodyHTML}
       ${footerHTML}
-    </div>`
+    </div>
+  `
+}
+
+// ====================== Рендер сервисного сообщения о звонке ======================
+function renderPhoneCallHTML(msg) {
+    // msg.actor, msg.actor_id, msg.discard_reason, msg.duration_seconds, msg.date
+    const actor = msg.actor || ''
+    const dateObj = new Date(msg.date)
+    const dateStr = isNaN(dateObj)
+        ? ''
+        : dateObj.toLocaleString('ru-RU', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+          })
+
+    // Определяем текст результата звонка
+    let callText = ''
+    let iconColor = ''
+    if (msg.discard_reason === 'hangup' && msg.duration_seconds != null) {
+        callText = `Incoming (${msg.duration_seconds} sec)`
+        iconColor = 'bg-green-500' // зелёная иконка
+    } else if (msg.discard_reason === 'missed') {
+        callText = 'Cancelled'
+        iconColor = 'bg-red-500' // красная иконка
+    } else {
+        callText = 'Call'
+        iconColor = 'bg-gray-500' // серый для прочих
+    }
+
+    // Определяем, «свое» это или «чужое»
+    const isSelf = myUserId && msg.actor_id === myUserId
+    const cls = isSelf ? 'msg-call-self' : 'msg-call-other'
+
+    // Строим HTML
+    return `
+    <div id="msg-${msg.id}" class="${cls}">
+      <!-- Иконка трубки -->
+      <div class="p-2 rounded-full ${iconColor} text-white flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 fill-current">
+          <path d="M13,1a1,1,0,0,1,1-1A10.011,10.011,0,0,1,24,10a1,1,0,0,1-2,0,8.009,8.009,0,0,0-8-8A1,1,0,0,1,13,1Zm1,5a4,4,0,0,1,4,4,1,1,0,0,0,2,0,6.006,6.006,0,0,0-6-6,1,1,0,0,0,0,2Zm9.093,10.739a3.1,3.1,0,0,1,0,4.378l-.91,1.049c-8.19,7.841-28.12-12.084-20.4-20.3l1.15-1A3.081,3.081,0,0,1,7.26.906c.031.031,1.884,2.438,1.884,2.438a3.1,3.1,0,0,1-.007,4.282L7.979,9.082a12.781,12.781,0,0,0,6.931,6.945l1.465-1.165a3.1,3.1,0,0,1,4.281-.006S23.062,16.708,23.093,16.739Zm-1.376,1.454s-2.393-1.841-2.424-1.872a1.1,1.1,0,0,0-1.549,0c-.027.028-2.044,1.635-2.044,1.635a1,1,0,0,1-.979.152A15.009,15.009,0,0,1,5.9,9.3a1,1,0,0,1,.145-1S7.652,6.282,7.679,6.256a1.1,1.1,0,0,0,0-1.549c-.031-.03-1.872-2.425-1.872-2.425a1.1,1.1,0,0,0-1.51.039l-1.15,1C-2.495,10.105,14.776,26.418,20.721,20.8l.911-1.05A1.121,1.121,0,0,0,21.717,18.193Z"/>
+        </svg>
+      </div>
+
+      <!-- Блок: кто звонил и результат -->
+      <div class="flex flex-col items-start">
+        <span class="font-semibold text-white">${escapeHtml(actor)}</span>
+        <span class="text-sm text-gray-300">${escapeHtml(callText)}</span>
+      </div>
+
+      <!-- Дата справа (margin-left auto) -->
+      <div class="ml-auto text-sm text-gray-400">${dateStr}</div>
+    </div>
+  `
 }
 
 // ====================== Утилита: короткий текст для реплая ======================
@@ -345,5 +416,5 @@ function scrollToReply(parentMsgId) {
     el.classList.add('highlight')
     setTimeout(() => {
         el.classList.remove('highlight')
-    }, 1500)
+    }, 3000) // 3 секунды подсветки
 }
